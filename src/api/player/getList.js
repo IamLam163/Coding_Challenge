@@ -14,7 +14,7 @@ import playerSkill from "../../db/model/playerSkill";
 
 export default async (req, res) => {
   try {
-    await sequelize.authenticate();
+    //await sequelize.authenticate();
     const players = await Player.findAll({
       include: [
         {

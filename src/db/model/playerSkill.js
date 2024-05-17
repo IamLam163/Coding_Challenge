@@ -17,10 +17,19 @@ const PlayerSkill = database.define(
       primaryKey: true
     },
     skill: {
-      type: Sequelize.STRING(200)
+      type: Sequelize.STRING(200),
+      allowNull: false,
+      validate: {
+        isIn: [["defense", "attack", "speed", "strength", "stamina"]]
+      }
     },
     value: {
-      type: Sequelize.INTEGER
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      validate: {
+        min: 0,
+        max: 100
+      }
     },
     playerId: {
       type: Sequelize.INTEGER,
@@ -39,7 +48,7 @@ const PlayerSkill = database.define(
 PlayerSkill.associate = (models) => {
   models.PlayerSkill.belongsTo(models.Player, {
     foreignKey: "playerId",
-    as: "aplayer"
+    as: "player"
   });
 };
 

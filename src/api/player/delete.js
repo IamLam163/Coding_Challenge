@@ -22,8 +22,12 @@ const secret = process.env.SECRET_KEY;
 export default async (req, res) => {
   authenticateToken(req, res, async () => {
     try {
-      await sequelize.authenticate();
+      //await sequelize.authenticate();
       const { id } = req.params;
+
+      if (!id || typeof id !== "string") {
+        return res.status(422).json({ message: "Invalid player id" });
+      }
       const player = await Player.findByPk(id);
       if (!player) {
         res.status(404).json({ message: "Player not found!" });
@@ -34,6 +38,12 @@ export default async (req, res) => {
       }
     } catch (error) {
       console.error("Error deleting player:", error);
+      if (error.name === "SequelizeValidationError") {
+        return res.status(400).json({
+          message: "Validation Error",
+          error: error.message
+        });
+      }
       res.status(500).json({
         message: "An Error occured when deleting player",
         error: error.message

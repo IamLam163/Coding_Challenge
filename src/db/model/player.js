@@ -17,10 +17,15 @@ const Player = database.define(
       primaryKey: true
     },
     name: {
-      type: Sequelize.STRING(200)
+      type: Sequelize.STRING(200),
+      allowNull: false
     },
     position: {
-      type: Sequelize.STRING(200)
+      type: Sequelize.STRING(200),
+      allowNull: false,
+      validate: {
+        isIn: [["defender", "midfielder", "forward"]]
+      }
     }
   },
   {
@@ -29,14 +34,9 @@ const Player = database.define(
 );
 
 Player.associate = (models) => {
-  models.Player.hasMany(models.PlayerSkill, {
-    foreignKey: "playerId",
-    as: "theplayerSkills",
-    onDelete: "CASCADE"
-  });
+  models.Player.hasMany(models.PlayerSkill);
 };
 
-Player.hasMany(PlayerSkill, { as: "playerSkills" });
-PlayerSkill.belongsTo(Player);
+Player.hasMany(PlayerSkill, { foreignKey: "playerId", as: "playerSkills" });
 
 export default Player;

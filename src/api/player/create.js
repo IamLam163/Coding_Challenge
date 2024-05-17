@@ -7,32 +7,24 @@ import Player from "../../db/model/player";
 import PlayerSkill from "../../db/model/playerSkill";
 
 export default async (req, res) => {
+  const { name, position, playerSkills } = req.body;
   try {
-    await sequelize.authenticate();
-    const playersData = req.body;
-    const players = [];
-
-    await Promise.all(
-      playersData.map(async (playerData) => {
-        const { name, position, playerSkills } = playerData;
-        const player = await Player.create({ name, position });
-
-        await Promise.all(
-          playerSkills.map(async (skill) => {
-            await PlayerSkill.create({
-              id: skill.id,
-              skill: skill.skill,
-              value: skill.value,
-              playerId: player.id
-            });
-          })
-        );
-
-        players.push(player);
-      })
+    const player = await Player.create({ name, position });
+    const skills = PlayerSkill.bulkCreate(
+      playerSkills.map((skill) => ({
+        skill: skill.skill,
+        value: skill.value,
+        playerId: player.id
+      }))
     );
-
-    res.status(201).json({ message: "Players created successfully!", players });
+    //createdPlayer = { name, position, playerSkills: skills };
+    const createdPlayer = await Player.findOne({
+      where: { id: player.id },
+      include: { model: PlayerSkill, as: "playerSkills" }
+    });
+    res
+      .status(201)
+      .json({ message: "Players created successfully!", createdPlayer });
   } catch (error) {
     console.error("Error creating players:", error);
     res.status(500).json({
@@ -41,70 +33,3 @@ export default async (req, res) => {
     });
   }
 };
-
-/*
-
-Takes too much time for bulk creation
-export default async (req, res) => {
-  try {
-    const players = [];
-    const playerSkills = [];
-    const transaction = await sequelize.transaction();
-
-    for (const playerData of req.body) {
-      const { name, position, playerSkills: skills } = playerData;
-      const player = await Player.create({ name, position }, { transaction });
-      players.push(player);
-
-      const skillsToCreate = skills.map((skill) => ({
-        skill: skill.skill,
-        value: skill.value,
-        playerId: player.id
-      }));
-      playerSkills.push(...skillsToCreate);
-    }
-
-    await PlayerSkill.bulkCreate(playerSkills, { transaction });
-
-    await transaction.commit();
-    res.status(201).json({ message: "Players created successfully!", players });
-  } catch (error) {
-    await transaction.rollback();
-    console.error("Error creating players:", error);
-    res.status(500).json({
-      message: "An error occurred when creating players",
-      error: error.message
-    });
-  }
-};
-*/
-
-/*
-export default async (req, res) => {
-  res.sendStatus(500);
-}
-*/
-
-/**   
- async function createPlayer(playerData) {
-  try {
-  const { name, position, playerSkills } = playerData;
-  const player = await Player.create({ name, position });
-
-  await Promise.all(
-    playerSkills.map(async (skill) => {
-      await PlayerSkill.create({
-        id: skill.id,
-        skill: skill.skill,
-        value: skill.value,
-        playerId: player.id
-      });
-    })
-  );
-  res.status(201).json({ message: "Players created successfully!", player });
-} catch (error) {
-  console.error("Error creating players:", error);
-}
-
-return player;
- */

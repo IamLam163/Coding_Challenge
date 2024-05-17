@@ -7,103 +7,72 @@ import Player from "../../db/model/player";
 import PlayerSkill from "../../db/model/playerSkill";
 
 export default async (req, res) => {
-  try {
-    await sequelize.authenticate();
-    const requirements = req.body;
+  const requirements = req.body;
 
-    if (!Array.isArray(requirements)) {
-      return res
-        .status(400)
-        .json({ message: "Invalid format for team requirements" });
+  try {
+    const totalPlayers = await Player.count();
+    if (
+      requirements.reduce((sum, req) => sum + req.numberOfPlayers, 0) >
+      totalPlayers
+    ) {
+      return res.status(400).json({
+        message: "Insufficient number of players to meet the requirements"
+      });
     }
 
     const selectedPlayers = [];
 
-    for (const requirement of requirements) {
-      const { position, mainSkill, numberOfPlayers } = requirement;
+    for (const req of requirements) {
+      const { position, mainSkill, numberOfPlayers } = req;
 
-      // Find players for the position
-      const players = await Player.findAll({
+      // Fetch players based on the position
+      let players = await Player.findAll({
         where: { position },
         include: {
           model: PlayerSkill,
-          as: "playerSkills"
-        }
+          as: "playerSkills",
+          required: false,
+          attributes: { exclude: ["id", "playerId"] }
+        },
+        attributes: { exclude: ["id"] }
       });
 
-      // Filter by main skill if provided
-      let playersWithMainSkill = players;
-      if (mainSkill) {
-        playersWithMainSkill = players.filter((player) =>
-          player.playerSkills.some((skill) => skill.skill === mainSkill)
-        );
-      }
-
-      // Check if enough players with main skill are found
-      if (playersWithMainSkill.length >= numberOfPlayers) {
-        // Select the required number of players with the main skill
-        selectedPlayers.push(
-          ...playersWithMainSkill.slice(0, numberOfPlayers).map((player) => ({
-            name: player.name,
-            position: player.position,
-            playerSkills: player.playerSkills
-          }))
-        );
-        continue; // Move to the next requirement
-      }
-
-      // If not enough players with main skill, use all and fill the rest with best by any skill
-      const remainingPlayers = numberOfPlayers - playersWithMainSkill.length;
-
-      // Get all players for the position (including those without the main skill)
-      const playersByPosition = await Player.findAll({
-        where: { position },
-        include: {
-          model: PlayerSkill,
-          as: "playerSkills"
-        }
-      });
-
-      // Check if there are enough players overall
-      if (playersByPosition.length < numberOfPlayers) {
+      if (players.length < numberOfPlayers) {
         return res.status(400).json({
           message: `Insufficient number of players for position: ${position}`
         });
       }
 
-      // Sort and select the best remaining players based on their highest skill value
-      const bestPlayers = playersByPosition
-        .sort((a, b) => {
-          const bestSkillA = Math.max(
-            ...a.playerSkills.map((skill) => skill.value)
+      players = players
+        .map((player) => {
+          const mainSkillValue = player.playerSkills.find(
+            (s) => s.skill === mainSkill
+          )?.value;
+          const highestSkillValue = Math.max(
+            ...player.playerSkills.map((s) => s.value)
           );
-          const bestSkillB = Math.max(
-            ...b.playerSkills.map((skill) => skill.value)
-          );
-          return bestSkillB - bestSkillA;
+          const playerData = player.get();
+          // delete playerData.mainSkillValue;
+          return {
+            ...playerData,
+            playerSkills: player.playerSkills,
+            mainSkillValue: mainSkillValue || highestSkillValue
+          };
         })
-        .slice(playersWithMainSkill.length, numberOfPlayers);
-
-      // Combine players with main skill and best remaining players
-      selectedPlayers.push(
-        ...playersWithMainSkill.map((player) => ({
-          name: player.name,
-          position: player.position,
-          playerSkills: player.playerSkills
-        })),
-        ...bestPlayers.map((player) => ({
-          name: player.name,
-          position: player.position,
-          playerSkills: player.playerSkills
-        }))
-      );
+        .sort((a, b) => b.mainSkillValue - a.mainSkillValue)
+        .slice(0, numberOfPlayers)
+        .map((player) => {
+          delete player.mainSkillValue; // Remove mainSkillValue from the player data
+          return player;
+        });
+      selectedPlayers.push(...players);
     }
 
-    res.status(200).json({ selectedPlayers });
+    res.status(200).json(selectedPlayers);
   } catch (error) {
-    console.error("Error processing team:", error);
+    console.error("Error selecting team:", error);
     res.status(500).json({
-      message: "An Error occured when processing team",
+      message: "An error occurred when selecting the team",
       error: error.message
     });
   }
